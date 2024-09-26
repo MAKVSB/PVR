@@ -1,6 +1,5 @@
 //! Run this file with `cargo test --test 04_luhn_algorithm`.
 
-// TODO: Implement the Luhn algorithm (https://en.wikipedia.org/wiki/Luhn_algorithm),
 // which is used to check the validity of e.g. bank or credit card numbers.
 
 fn luhn_algorithm(num: u64) -> bool {

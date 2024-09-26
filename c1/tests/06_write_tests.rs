@@ -36,7 +36,6 @@ fn sanitize(input: &str) -> &str {
     sanitized
 }
 
-/// TODO: write tests for the `sanitize` function
 ///
 /// Bonus: can you find any bugs using the [proptest](https://proptest-rs.github.io/proptest/intro.html)
 /// crate?

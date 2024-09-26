@@ -1,6 +1,5 @@
 //! Run this file with `cargo test --test 03_struct`.
 
-// TODO: Implement a `Vec3` structure that represents a three-dimensional vector.
 // Use field names `x`, `y` and `z`.
 // Implement `new`, `add`, `length` and `normalize` methods, so that tests pass.
 // If you `normalize` a vector that has length 0, it should return a zero-length vector.

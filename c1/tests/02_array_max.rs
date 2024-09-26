@@ -1,6 +1,5 @@
 //! Run this file with `cargo test --test 02_array_max`.
 
-// TODO: Implement a function that finds the maximum number of an array.
 // Implement it manually with a `for` cycle or `loop`.
 //
 // The input argument is an array of ten `i32` integers.

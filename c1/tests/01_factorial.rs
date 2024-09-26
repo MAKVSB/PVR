@@ -1,7 +1,5 @@
 //! Run this file with `cargo test --test 01_factorial`.
 
-// TODO: Implement a simple factorial function.
-
 fn factorial(a: u32) -> u32 {
     if a == 0 {
         1

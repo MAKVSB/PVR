@@ -1,6 +1,5 @@
 //! Run this file with `cargo test --test 05_match_parentheses`.
 
-// TODO: Implement a function called `match_parentheses`.
 // It will receive a string slice (`&str`) containing arbitrary characters.
 //
 // Check that all parentheses within the string (`()`, `[]`, `{}`) are matched properly:
