@@ -13,10 +13,6 @@
 // When the PC is sleeping, it also remembers `sleep_time` (time since going to sleep).
 //
 
-use std::thread::sleep;
-
-
-
 struct ComputerState {
     enabled: bool,
     sleeping: bool,
