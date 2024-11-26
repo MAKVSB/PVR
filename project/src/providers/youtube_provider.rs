@@ -1,9 +1,9 @@
-use std::{env, fmt::Debug};
+use std::{env, fmt::Debug, thread::sleep, time::Duration};
 
 use google_youtube3::{api::{Playlist, PlaylistItem, PlaylistItemSnippet, PlaylistSnippet, PlaylistStatus, ResourceId, SearchResult, Video}, hyper_rustls, hyper_util, yup_oauth2::{self, authenticator_delegate::InstalledFlowDelegate}, YouTube};
-use tracing::info;
+use tokio::sync::mpsc;
 
-use crate::types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncPlaylistItemProviderData, RSyncSong, RSyncSongProviderData, RSyncSongProviderDataYoutube};
+use crate::{event::{Event, GlobalEvent, GlobalEventData, GlobalEventDataFullfilness}, types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncPlaylistItemProviderData, RSyncSong, RSyncSongProviderData, RSyncSongProviderDataYoutube}};
 
 use super::provider_traits::{APIProvider, APIProviderBuilder};
 
@@ -168,22 +168,6 @@ impl From<SearchResult> for RSyncSong {
     }
 }
 
-impl From<Video> for RSyncSong {
-    fn from(track: Video) -> Self {
-        let snippet = track.snippet.unwrap();
-        let artist_name = snippet.channel_title.clone().unwrap_or_default();
-        RSyncSong {
-            artists: artist_name.strip_suffix(" - Topic").unwrap_or(&artist_name).to_string(),
-            url: format!("https://music.youtube.com/watch?v={}", track.id.as_ref().unwrap()),
-            id: track.id.unwrap(),
-            name: snippet.title.unwrap(),
-            r#type: RSyncSongProviderData::Youtube(RSyncSongProviderDataYoutube {
-                playlist_id: None,
-            })
-        }
-    }
-}
-
 impl APIProvider for YoutubeProvider {
     async fn new() -> Self {
         YoutubeProviderBuilder::new_authorized().await
@@ -192,10 +176,6 @@ impl APIProvider for YoutubeProvider {
     async fn get_playlists(&mut self) -> Vec<RSyncPlaylistItem> {
         let mut next_page_token: Option<String> = Some("".into());
         let mut playlists: Vec<RSyncPlaylistItem> = Vec::new();
-
-        let a = self.client.channels().list(&vec!["contentDetails".into()]).mine(true).doit().await.unwrap().1.items.unwrap();
-        let b = a.first().unwrap();
-        info!("{b:?}");
 
         playlists.push(RSyncPlaylistItem {
             collaborative: false,
@@ -230,13 +210,13 @@ impl APIProvider for YoutubeProvider {
         playlists
     }
 
-    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper ) -> Vec<RSyncSong> {
+    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper, event_sender: Option<(mpsc::UnboundedSender<Event>, u128)> ) -> Vec<RSyncSong> {
         match playlist_id {
             PlaylistIdWrapper::Liked => {
-                self.get_playlist_songs_inner(&self.liked_playlist_id.clone()).await
+                self.get_playlist_songs_inner(&self.liked_playlist_id.clone(), event_sender).await
             },
             PlaylistIdWrapper::Id(playlist_id) => {
-                self.get_playlist_songs_inner(&playlist_id).await
+                self.get_playlist_songs_inner(&playlist_id, event_sender).await
             },
         }
     }
@@ -331,7 +311,7 @@ impl APIProvider for YoutubeProvider {
 }
 
 impl YoutubeProvider {
-    async fn get_playlist_songs_inner(&mut self, playlist_id: &String) -> Vec<RSyncSong> {
+    async fn get_playlist_songs_inner(&mut self, playlist_id: &String, event_sender: Option<(mpsc::UnboundedSender<Event>, u128)>) -> Vec<RSyncSong> {
         let mut next_page_token: Option<String> = Some("".into());
         let mut songs: Vec<RSyncSong> = Vec::new();
 
@@ -340,17 +320,18 @@ impl YoutubeProvider {
                 break;
             }
 
+            let mut songs_inner: Vec<RSyncSong> = Vec::new();
             let result_body = self.client
-                .playlist_items()
-                .list(&vec!["snippet".into(), "contentDetails".into(), "status".into()])
-                .playlist_id(playlist_id.as_str())
-                .page_token(next_page_token.unwrap().as_str())
-                .doit().await
-                .unwrap().1;
+                        .playlist_items()
+                        .list(&vec!["snippet".into(), "contentDetails".into(), "status".into()])
+                        .playlist_id(playlist_id.as_str())
+                        .page_token(next_page_token.unwrap().as_str())
+                        .doit().await
+                        .unwrap().1;
             next_page_token = result_body.next_page_token.clone();
 
             //all this second request mess for almost nothing
-            let song_ids: Vec<String> = result_body.items.unwrap()
+            let song_ids: Vec<String> = result_body.items.as_ref().unwrap()
                 .iter()
                 .map(|data| -> String {
                     data.snippet.clone().unwrap()
@@ -363,13 +344,19 @@ impl YoutubeProvider {
                 return songs;
             }
 
-            for detailed_song in self.get_detailed_video_data(song_ids).await {
-                //all this mess up here just to get the category number to filter just the music cause youtube-music api does not have public access 
-                let video_category = detailed_song.snippet.clone().unwrap().category_id.unwrap();
-                if video_category == "10" {
-                    songs.push(detailed_song.clone().into());
+            let detailed_song_data = self.get_detailed_video_data(song_ids).await;
+
+            for (song, detailed_song) in result_body.items.as_ref().unwrap().iter().zip(detailed_song_data) {
+                //all this mess up here just to get the category number to filter just the music cause youtube-music api does not have public access
+                if detailed_song.snippet.unwrap().category_id.unwrap() == "10" { 
+                    songs_inner.push(song.clone().into());
                 }
             }
+
+            if let Some(event_sender) = event_sender.clone() {
+                event_sender.0.send(Event::DataReceived(event_sender.1, GlobalEvent::Youtube(GlobalEventData::Songs(GlobalEventDataFullfilness::Partial(songs_inner.clone()))))).unwrap();
+            }
+            songs.append(&mut songs_inner);
         }
 
         songs
