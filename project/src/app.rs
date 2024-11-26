@@ -62,7 +62,7 @@ impl App {
 
     pub fn handle_received_data(&mut self, data: GlobalEvent) {
         match data {
-            GlobalEvent::Generic(_global_event_data) => todo!(),
+            GlobalEvent::Generic(_global_event_data) => {},
             GlobalEvent::Spotify(global_event_data) => self.spotify_column.handle_received_data(global_event_data),
             GlobalEvent::Youtube(global_event_data) => self.youtube_column.handle_received_data(global_event_data),
         }
@@ -179,7 +179,9 @@ impl App {
                     },
                     KeyCode::Right => {
                         match self.active_view {
-                            ActiveBlock::SpotifyPlaylistSelector => todo!(),
+                            ActiveBlock::SpotifyPlaylistSelector => {
+                                self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "Not implemented. Please select playlists and move songs.\nYou can use Ctrl-A to move all songs".into())))
+                            },
                             ActiveBlock::SpotifySongSelector => {
                                 let selected_songs = self.spotify_column.song_selector.get_selected();
                                 match (selected_songs.is_empty(), self.youtube_column.playlist_selector.get_selected().first()) {
