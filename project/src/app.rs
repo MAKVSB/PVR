@@ -3,13 +3,11 @@ use std::error;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
 
-use crate::{event::{Event, GlobalEvent, GlobalEventData}, providers::{spotify_provider::SpotifyProvider, youtube_provider::YoutubeProvider}, widgets::{popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, add_song_selection::AddSongSelectionPopup, message_popup::MessagePopup, popup::{GenericPopup, PlatformPopup, PopupEvent, PopupTyped}}, spotify_column::SpotifyColumn, youtube_column::YoutubeColumn}};
+use crate::{event::{Event, GlobalEvent}, providers::{spotify_provider::SpotifyProvider, youtube_provider::YoutubeProvider}, widgets::{popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, add_song_selection::AddSongSelectionPopup, message_popup::MessagePopup, popup::{GenericPopup, PlatformPopup, PopupEvent, PopupTyped}}, spotify_column::SpotifyColumn, youtube_column::YoutubeColumn}};
 use crate::providers::provider_traits::APIProvider;
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
-
-trait Test {}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ActiveBlock {
