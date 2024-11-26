@@ -44,15 +44,16 @@ where
         }
     }
     
-    pub fn get_selected_items(&mut self) -> Option<Vec<&T>>{
+    pub fn get_selected_items(&mut self) -> Vec<&T>{
         match &self.items {
             Some(items) => {
-                let songs = items.iter().enumerate()
+                items.iter().enumerate()
                     .filter(|(i, _item)| self.selected.contains(i))
-                    .map(|(_i, item)| item).collect::<Vec<&T>>().clone();
-                Some(songs)
+                    .map(|(_i, item)| item)
+                    .collect::<Vec<&T>>()
+                    .clone()
             },
-            None => None,
+            None => Vec::new(),
         }
     }
 

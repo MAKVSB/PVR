@@ -4,7 +4,7 @@ use ratatui::{
 };
 use tokio::sync::mpsc;
 
-use crate::{app::ActiveBlock, event::{Event, GlobalEvent, GlobalEventData, Platform}, providers::{provider_traits::APIProvider, youtube_provider::YoutubeProvider}, types::{music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}, playlist_selector_key_event_response::SelectorKeyEventResponse}};
+use crate::{app::ActiveBlock, event::{Event, GlobalEvent, GlobalEventData}, providers::{provider_traits::APIProvider, youtube_provider::YoutubeProvider}, types::{music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}, playlist_selector_key_event_response::SelectorKeyEventResponse}};
 
 use super::{playlist_selector::PlaylistSelector, song_selector::SongSelector};
 
@@ -13,9 +13,8 @@ pub struct YoutubeColumn {
     pub provider: YoutubeProvider,
     pub playlist_selector: PlaylistSelector,
     pub song_selector: SongSelector,
-    pub render_rows: Layout,
-    pub selected_playlist_id: Option<PlaylistIdWrapper>,
-    pub global_event_sender: mpsc::UnboundedSender<Event>,
+    render_rows: Layout,
+    global_event_sender: mpsc::UnboundedSender<Event>,
 }
 impl YoutubeColumn {
     pub fn new(provider: YoutubeProvider, global_event_sender: mpsc::UnboundedSender<Event>) -> Self {
@@ -27,7 +26,6 @@ impl YoutubeColumn {
                 Constraint::Percentage(40),
                 Constraint::Percentage(60),
             ]),
-            selected_playlist_id: None,
             global_event_sender,
         };
         s.refresh_playlists();
@@ -35,16 +33,20 @@ impl YoutubeColumn {
     }
 
     pub fn refresh_songs(&mut self) {
-        if let Some(p_id) = self.selected_playlist_id.clone() {
+        if let Some(playlist) = self.playlist_selector.get_selected().first() {
+            let p_id = playlist.id.clone();
             self.song_selector.set_loading();
             let mut provider_clone = self.provider.clone();
             let event_sender = self.global_event_sender.clone();
             tokio::spawn(async move {
                 let a = provider_clone.get_playlist_songs(p_id).await;
-                event_sender.send(Event::DataReceived(GlobalEvent {
-                    platform: Platform::Spotify,
-                    data: GlobalEventData::Songs(Some(a))
-                }))
+                event_sender.send(
+                    Event::DataReceived(
+                        GlobalEvent::Youtube(
+                            GlobalEventData::Songs(Some(a))
+                        )
+                    )
+                )
             });
         }
     }
@@ -60,10 +62,13 @@ impl YoutubeColumn {
         let event_sender = self.global_event_sender.clone();
         tokio::spawn(async move {
             let a = provider_clone.get_playlists().await;
-            event_sender.send(Event::DataReceived(GlobalEvent {
-                platform: Platform::Youtube,
-                data: GlobalEventData::Playlists(Some(a))
-            }))
+            event_sender.send(
+                Event::DataReceived(
+                    GlobalEvent::Youtube(
+                        GlobalEventData::Playlists(Some(a))
+                    )
+                )
+            )
         });
     }
 
@@ -73,17 +78,18 @@ impl YoutubeColumn {
     }
 
     pub fn select_playlist(&mut self, playlist_id: PlaylistIdWrapper) {
-        self.selected_playlist_id = Some(playlist_id.clone());
-
         self.song_selector.set_loading();
         let mut provider_clone = self.provider.clone();
         let event_sender = self.global_event_sender.clone();
         tokio::spawn(async move {
             let a = provider_clone.get_playlist_songs(playlist_id).await;
-            event_sender.send(Event::DataReceived(GlobalEvent {
-                platform: Platform::Youtube,
-                data: GlobalEventData::Songs(Some(a))
-            }))
+            event_sender.send(
+                Event::DataReceived(
+                    GlobalEvent::Youtube(
+                        GlobalEventData::Songs(Some(a))
+                    )
+                )
+            )
         });
     }
 
@@ -98,6 +104,13 @@ impl YoutubeColumn {
         let [playlist_selection_area, song_selection_area] = self.render_rows.areas(area);
         self.playlist_selector.render(frame, playlist_selection_area);
         self.song_selector.render(frame, song_selection_area);
+    }
+
+    pub fn handle_received_data(&mut self, data: GlobalEventData) {
+        match data {
+            GlobalEventData::Playlists(vec) => self.set_playlists(vec),
+            GlobalEventData::Songs(vec) => self.set_songs(vec),
+        }
     }
 
     pub fn handle_key_events(&mut self, key_event: KeyEvent, active_block: ActiveBlock) {

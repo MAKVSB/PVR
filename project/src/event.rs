@@ -7,22 +7,16 @@ use tokio::sync::mpsc;
 use crate::{app::AppResult, types::music_types::{RSyncPlaylistItem, RSyncSong}};
 
 #[derive(Clone, Debug)]
-pub enum Platform {
-  Spotify,
-  Youtube,
-  None
-}
-
-#[derive(Clone, Debug)]
 pub enum GlobalEventData {
   Playlists(Option<Vec<RSyncPlaylistItem>>),
   Songs(Option<Vec<RSyncSong>>)
 }
 
 #[derive(Clone, Debug)]
-pub struct GlobalEvent {
-  pub platform: Platform,
-  pub data: GlobalEventData,
+pub enum GlobalEvent {
+  Generic(GlobalEventData),
+  Spotify(GlobalEventData),
+  Youtube(GlobalEventData),
 }
 
 /// Terminal events.

@@ -23,7 +23,7 @@ impl<'a> PlaylistSelector {
         }
     }
 
-    pub fn get_selected_songs(&mut self) -> Option<Vec<&RSyncPlaylistItem>>{
+    pub fn get_selected(&mut self) -> Vec<&RSyncPlaylistItem>{
         self.selector.get_selected_items()
     }
 
@@ -46,10 +46,8 @@ impl<'a> PlaylistSelector {
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> SelectorKeyEventResponse {
         match self.selector.handle_key_events(key_event) {
             ListSelectorKeyResponse::Selected => {
-                if let Some(playlists) = self.selector.get_selected_items() {
-                    if let Some(playlist) = playlists.first() {
-                        return SelectorKeyEventResponse::Selected(playlist.id.clone())
-                    }
+                if let Some(playlist) = self.selector.get_selected_items().first() {
+                    return SelectorKeyEventResponse::Selected(playlist.id.clone())
                 };
                 return SelectorKeyEventResponse::None
             },

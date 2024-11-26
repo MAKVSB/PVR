@@ -44,7 +44,7 @@ async fn main() -> AppResult<()> {
         // Handle events.
         match tui.events.next().await? {
             Event::Tick => app.tick(),
-            Event::Key(key_event) => app.handle_key_events(key_event).await?,
+            Event::Key(key_event) => app.handle_key_events(key_event).await,
             Event::Mouse(_) => {}
             Event::Resize(_, _) => {}
             Event::DataReceived(data) => app.handle_received_data(data),

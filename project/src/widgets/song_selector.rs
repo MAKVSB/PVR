@@ -25,7 +25,7 @@ impl SongSelector {
         }
     }
     
-    pub fn get_selected_songs(&mut self) -> Option<Vec<&RSyncSong>>{
+    pub fn get_selected(&mut self) -> Vec<&RSyncSong>{
         self.selector.get_selected_items()
     }
 

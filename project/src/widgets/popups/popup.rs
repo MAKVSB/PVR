@@ -1,70 +1,76 @@
 use crossterm::event::KeyEvent;
 
-use crate::{providers::{provider_traits::APIProvider, spotify_provider::SpotifyProvider, youtube_provider::YoutubeProvider}, widgets::popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, add_song_selection::AddSongSelectionPopup, message_popup::{MessagePopup, MessagePopupEvent}}};
+use crate::widgets::popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, add_song_selection::AddSongSelectionPopup, message_popup::MessagePopup};
 
 #[derive(Debug)]
-
-pub enum PopupEvent<T>
-where 
-    T: APIProvider + Clone
-{
+pub enum PopupEvent {
     PopupClose,
     PopupCloseRefresh,
-    PopupCloseDataPopup(Popup<T>),
+    PopupCloseData(String),
     None,
     Pass,
 }
 
-#[derive(Debug)]
-
-pub enum PopupEventTyped {
-    Youtube(PopupEvent<YoutubeProvider>),
-    Spotify(PopupEvent<SpotifyProvider>)
-}
 
 #[derive(Debug)]
-pub enum Popup<T>
-where 
-    T: APIProvider + Clone
-{
-    AddSong(AddSongPopup<T>),
-    AddSongSelect(AddSongSelectionPopup<T>),
-    AddPlaylist(AddPlaylistPopup<T>)
+pub enum GenericPopup {
+    Message(MessagePopup),
 }
-impl<T> Popup<T>
-where 
-    T: APIProvider + Clone
+
+impl GenericPopup
 {
     pub fn render(&mut self, frame: &mut ratatui::Frame<'_>, area:ratatui::prelude::Rect ) {
         match self {
-            Popup::AddSong(add_song_popup) => add_song_popup.render(frame, area),
-            Popup::AddSongSelect(add_song_popup) => add_song_popup.render(frame, area),
-            Popup::AddPlaylist(add_playlist_popup) => add_playlist_popup.render(frame, area),
+            GenericPopup::Message(message_popup) => message_popup.render(frame, area),
         }
     }
 
-    pub async fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent<T> {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent {
         match self {
-            Popup::AddSong(add_song_popup) => add_song_popup.handle_key_events(key_event).await,
-            Popup::AddSongSelect(add_song_popup) => add_song_popup.handle_key_events(key_event).await,
-            Popup::AddPlaylist(add_playlist_popup) => add_playlist_popup.handle_key_events(key_event).await,
+            GenericPopup::Message(message_popup) => message_popup.handle_key_events(key_event),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum PlatformPopup {
+    AddSong(AddSongPopup),
+    AddSongSelect(AddSongSelectionPopup),
+    AddPlaylist(AddPlaylistPopup),
+}
+
+impl PlatformPopup
+{
+    pub fn render(&mut self, frame: &mut ratatui::Frame<'_>, area:ratatui::prelude::Rect ) {
+        match self {
+            PlatformPopup::AddSong(popup) => popup.render(frame, area),
+            PlatformPopup::AddSongSelect(popup) => popup.render(frame, area),
+            PlatformPopup::AddPlaylist(popup) => popup.render(frame, area),
+        }
+    }
+
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent {
+        match self {
+            PlatformPopup::AddSong(popup) => popup.handle_key_events(key_event),
+            PlatformPopup::AddSongSelect(popup) => popup.handle_key_events(key_event),
+            PlatformPopup::AddPlaylist(popup) => popup.handle_key_events(key_event),
         }
     }
 }
 
 #[derive(Debug)]
 pub enum PopupTyped {
-    Spotify(Popup<SpotifyProvider>),
-    Youtube(Popup<YoutubeProvider>),
-    Message(MessagePopup),
+    Spotify(PlatformPopup),
+    Youtube(PlatformPopup),
+    Generic(GenericPopup),
     None,
 }
 impl PopupTyped{
     pub fn render(&mut self, frame: &mut ratatui::Frame<'_>, area:ratatui::prelude::Rect ) {
         match self {
-            PopupTyped::Youtube(add_song_popup) => add_song_popup.render(frame, area),
-            PopupTyped::Spotify(add_song_popup) => add_song_popup.render(frame, area),
-            PopupTyped::Message(message_popup) => message_popup.render(frame, area),
+            PopupTyped::Youtube(popup) => popup.render(frame, area),
+            PopupTyped::Spotify(popup) => popup.render(frame, area),
+            PopupTyped::Generic(popup) => popup.render(frame, area),
             PopupTyped::None => {},
         }
     }
@@ -73,19 +79,12 @@ impl PopupTyped{
         matches!(self,PopupTyped::None)
     }
 
-    pub async fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEventTyped {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent {
         match self {
-            PopupTyped::Youtube(add_song_popup) => PopupEventTyped::Youtube(add_song_popup.handle_key_events(key_event).await),
-            PopupTyped::Spotify(add_song_popup) => PopupEventTyped::Spotify(add_song_popup.handle_key_events(key_event).await),
-            PopupTyped::Message(message_popup) => {
-                let res = message_popup.handle_key_events(key_event);
-                match res {
-                    MessagePopupEvent::None => PopupEventTyped::Spotify(PopupEvent::None),
-                    MessagePopupEvent::Pass => PopupEventTyped::Spotify(PopupEvent::Pass),
-                    MessagePopupEvent::PopupClose => PopupEventTyped::Spotify(PopupEvent::PopupClose),
-                }
-            },
-            PopupTyped::None => PopupEventTyped::Spotify(PopupEvent::Pass),
+            PopupTyped::Youtube(popup) => popup.handle_key_events(key_event),
+            PopupTyped::Spotify(popup) => popup.handle_key_events(key_event),
+            PopupTyped::Generic(popup) => popup.handle_key_events(key_event),
+            PopupTyped::None => PopupEvent::Pass,
         }
     }
 }

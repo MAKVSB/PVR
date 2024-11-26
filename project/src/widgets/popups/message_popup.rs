@@ -3,12 +3,7 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Rect}, widgets::{Block, Clear, Paragraph}, Frame
 };
 
-#[derive(Debug)]
-pub enum MessagePopupEvent {
-    None,
-    Pass,
-    PopupClose,
-}
+use super::popup::PopupEvent;
 
 #[derive(Debug)]
 pub struct MessagePopup {
@@ -41,10 +36,10 @@ impl MessagePopup {
         frame.render_widget(block, area);
     }
 
-    pub fn handle_key_events(&mut self, key_event: KeyEvent)-> MessagePopupEvent {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent)-> PopupEvent {
         match key_event.code {
-            KeyCode::Esc | KeyCode::Enter => MessagePopupEvent::PopupClose,
-            _ => MessagePopupEvent::None
+            KeyCode::Esc | KeyCode::Enter => PopupEvent::PopupClose,
+            _ => PopupEvent::None
         }
     }
 }

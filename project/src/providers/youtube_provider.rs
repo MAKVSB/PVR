@@ -84,7 +84,7 @@ impl APIProviderBuilder for YoutubeProviderBuilder {
         let _ = auth.token(&["https://www.googleapis.com/auth/youtube"]).await.unwrap();
 
 
-        let client = hyper_util::client::legacy::Client::builder(
+        let yt_client = hyper_util::client::legacy::Client::builder(
             hyper_util::rt::TokioExecutor::new()
         )
         .build(
@@ -95,8 +95,16 @@ impl APIProviderBuilder for YoutubeProviderBuilder {
                 .enable_http1()
                 .build()
         );
+        
+        let client = YouTube::new(yt_client, auth);
+        let liked_playlist_id = client.channels()
+            .list(&vec!["contentDetails".into()])
+            .mine(true)
+            .doit().await.unwrap().1.items.unwrap()[0].content_details.clone().unwrap().related_playlists.unwrap().likes.unwrap();
+
         YoutubeProvider {
-            client: YouTube::new(client, auth),
+            client,
+            liked_playlist_id,
         }
     }
 }
@@ -104,6 +112,7 @@ impl APIProviderBuilder for YoutubeProviderBuilder {
 #[derive(Clone)]
 pub struct YoutubeProvider {
     client: YouTube<hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>>,
+    liked_playlist_id: String,
 }
 impl Debug for YoutubeProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -159,6 +168,22 @@ impl From<SearchResult> for RSyncSong {
     }
 }
 
+impl From<Video> for RSyncSong {
+    fn from(track: Video) -> Self {
+        let snippet = track.snippet.unwrap();
+        let artist_name = snippet.channel_title.clone().unwrap_or_default();
+        RSyncSong {
+            artists: artist_name.strip_suffix(" - Topic").unwrap_or(&artist_name).to_string(),
+            url: format!("https://music.youtube.com/watch?v={}", track.id.as_ref().unwrap()),
+            id: track.id.unwrap(),
+            name: snippet.title.unwrap(),
+            r#type: RSyncSongProviderData::Youtube(RSyncSongProviderDataYoutube {
+                playlist_id: None,
+            })
+        }
+    }
+}
+
 impl APIProvider for YoutubeProvider {
     async fn new() -> Self {
         YoutubeProviderBuilder::new_authorized().await
@@ -172,12 +197,10 @@ impl APIProvider for YoutubeProvider {
         let b = a.first().unwrap();
         info!("{b:?}");
 
-
-        let liked_playlist_id = self.get_liked_playlist_id().await;
         playlists.push(RSyncPlaylistItem {
             collaborative: false,
             description: Some("Favourite playlist".into()),
-            url: format!("https://www.youtube.com/playlist?list={liked_playlist_id}").into(),
+            url: format!("https://www.youtube.com/playlist?list={}", self.liked_playlist_id.clone()).into(),
             id: PlaylistIdWrapper::Liked,
             name: "Favorites".into(),
             owned: true,
@@ -210,8 +233,7 @@ impl APIProvider for YoutubeProvider {
     async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper ) -> Vec<RSyncSong> {
         match playlist_id {
             PlaylistIdWrapper::Liked => {
-                let playlist_id = self.get_liked_playlist_id().await;
-                self.get_playlist_songs_inner(&playlist_id).await
+                self.get_playlist_songs_inner(&self.liked_playlist_id.clone()).await
             },
             PlaylistIdWrapper::Id(playlist_id) => {
                 self.get_playlist_songs_inner(&playlist_id).await
@@ -236,9 +258,7 @@ impl APIProvider for YoutubeProvider {
     async fn add_playlist_song(&mut self, playlist_id: PlaylistIdWrapper, song_id: Vec<String>) {
         let p_id = match playlist_id {
             PlaylistIdWrapper::Id(playlist_id) => playlist_id,
-            PlaylistIdWrapper::Liked => {
-                self.get_liked_playlist_id().await
-            },
+            PlaylistIdWrapper::Liked => self.liked_playlist_id.clone(),
         };
 
         for id in song_id {
@@ -258,18 +278,12 @@ impl APIProvider for YoutubeProvider {
     }
 
     async fn search(&mut self, query: String, limit: u32) -> Vec<RSyncSong> {       
-        let mut search_data = self.client.search().list(&vec!["snippet".into()]).q(query.as_str()).doit().await.unwrap().1.items.unwrap();
-        search_data = search_data.into_iter().filter(|data| {
-            match data.id.as_ref().unwrap().kind.as_ref() {
-                Some(item_data) => {
-                    match item_data.as_str() {
-                        "youtube#video" => true,
-                        _ => false
-                    }
-                },
-                None => false,
-            }
-        }).collect();
+        let search_data = self.client.search()
+            .list(&vec!["snippet".into()])
+            .q(query.as_str())
+            .video_category_id("10")
+            .add_type("video")
+            .doit().await.unwrap().1.items.unwrap();
 
         let mut songs = Vec::new();
 
@@ -326,17 +340,17 @@ impl YoutubeProvider {
                 break;
             }
 
-            let result = self.client
-                        .playlist_items()
-                        .list(&vec!["snippet".into(), "contentDetails".into(), "status".into()])
-                        .playlist_id(playlist_id.as_str())
-                        .page_token(next_page_token.unwrap().as_str())
-                        .doit().await;
-            let result_body = result.unwrap().1;
+            let result_body = self.client
+                .playlist_items()
+                .list(&vec!["snippet".into(), "contentDetails".into(), "status".into()])
+                .playlist_id(playlist_id.as_str())
+                .page_token(next_page_token.unwrap().as_str())
+                .doit().await
+                .unwrap().1;
             next_page_token = result_body.next_page_token.clone();
 
             //all this second request mess for almost nothing
-            let song_ids: Vec<String> = result_body.items.as_ref().unwrap()
+            let song_ids: Vec<String> = result_body.items.unwrap()
                 .iter()
                 .map(|data| -> String {
                     data.snippet.clone().unwrap()
@@ -349,21 +363,16 @@ impl YoutubeProvider {
                 return songs;
             }
 
-            let detailed_song_data = self.get_detailed_video_data(song_ids).await;
-
-            for (song, detailed_song) in result_body.items.as_ref().unwrap().iter().zip(detailed_song_data) {
-                if detailed_song.snippet.unwrap().category_id.unwrap() == "10" {
-                    //all this mess up here just to get the category number to filter just the music cause youtube-music api does not have public access 
-                    songs.push(song.clone().into());
+            for detailed_song in self.get_detailed_video_data(song_ids).await {
+                //all this mess up here just to get the category number to filter just the music cause youtube-music api does not have public access 
+                let video_category = detailed_song.snippet.clone().unwrap().category_id.unwrap();
+                if video_category == "10" {
+                    songs.push(detailed_song.clone().into());
                 }
             }
         }
 
         songs
-    }
-
-    pub async fn get_liked_playlist_id(&mut self) -> String {
-        self.client.channels().list(&vec!["contentDetails".into()]).mine(true).doit().await.unwrap().1.items.unwrap()[0].content_details.clone().unwrap().related_playlists.unwrap().likes.unwrap()
     }
 
     pub async fn get_detailed_video_data(&mut self, song_ids: Vec<String>) -> Vec<Video>{

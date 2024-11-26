@@ -3,11 +3,13 @@ use std::error;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
 
-use crate::{event::{Event, GlobalEvent, GlobalEventData, Platform}, providers::{spotify_provider::SpotifyProvider, youtube_provider::YoutubeProvider}, widgets::{popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, message_popup::MessagePopup, popup::{Popup, PopupEvent, PopupEventTyped, PopupTyped}}, spotify_column::SpotifyColumn, youtube_column::YoutubeColumn}};
+use crate::{event::{Event, GlobalEvent, GlobalEventData}, providers::{spotify_provider::SpotifyProvider, youtube_provider::YoutubeProvider}, widgets::{popups::{add_playlist::AddPlaylistPopup, add_song::AddSongPopup, add_song_selection::AddSongSelectionPopup, message_popup::MessagePopup, popup::{GenericPopup, PlatformPopup, PopupEvent, PopupTyped}}, spotify_column::SpotifyColumn, youtube_column::YoutubeColumn}};
 use crate::providers::provider_traits::APIProvider;
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
+
+trait Test {}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ActiveBlock {
@@ -59,179 +61,178 @@ impl App {
     }
 
     pub fn handle_received_data(&mut self, data: GlobalEvent) {
-        match data.platform {
-            Platform::Spotify => {
-                match data.data {
-                    GlobalEventData::Playlists(vec) => self.spotify_column.set_playlists(vec),
-                    GlobalEventData::Songs(vec) => self.spotify_column.set_songs(vec),
-                }
-            },
-            Platform::Youtube => {
-                match data.data {
-                    GlobalEventData::Playlists(vec) => self.youtube_column.set_playlists(vec),
-                    GlobalEventData::Songs(vec) => self.youtube_column.set_songs(vec),
-                }
-            },
-            Platform::None => todo!(),
+        match data {
+            GlobalEvent::Generic(_global_event_data) => todo!(),
+            GlobalEvent::Spotify(global_event_data) => self.spotify_column.handle_received_data(global_event_data),
+            GlobalEvent::Youtube(global_event_data) => self.youtube_column.handle_received_data(global_event_data),
         }
     }
 
-    pub async fn handle_key_events(&mut self, key_event: KeyEvent) -> AppResult<()> {
-        match self.popup.handle_key_events(key_event).await {
-            PopupEventTyped::Youtube(popup_event) => {
-                match popup_event {
+    pub async fn handle_key_events(&mut self, key_event: KeyEvent) {
+        self.check_close_key(key_event);
+        match self.popup.is_none() {
+            false => {
+                match self.popup.handle_key_events(key_event) {
                     PopupEvent::PopupClose => {
                         self.popup = PopupTyped::None;
-                        return Ok(())
                     },
                     PopupEvent::None => {
-                        return Ok(())
                     },
                     PopupEvent::Pass => {},
-                    PopupEvent::PopupCloseDataPopup(popup) => {
-                        self.popup = PopupTyped::Youtube(popup)
-                    },
                     PopupEvent::PopupCloseRefresh => {
-                        self.popup = PopupTyped::None;
                         self.selective_refresh();
-                    },
-                }
-            },
-            PopupEventTyped::Spotify(popup_event) => {
-                match popup_event {
-                    PopupEvent::PopupClose => {
                         self.popup = PopupTyped::None;
-                        return Ok(())
                     },
-                    PopupEvent::None => {
-                        return Ok(())
-                    },
-                    PopupEvent::Pass => {},
-                    PopupEvent::PopupCloseDataPopup(popup) => {
-                        self.popup = PopupTyped::Spotify(popup)
-                    },
-                    PopupEvent::PopupCloseRefresh => {
-                        self.popup = PopupTyped::None;
-                        self.selective_refresh();
-                    },
-                }
-            },
-        }
-
-        match self.active_view {
-            ActiveBlock::SpotifyPlaylistSelector |
-            ActiveBlock::SpotifySongSelector => self.spotify_column.handle_key_events(key_event, self.active_view),
-            ActiveBlock::YoutubePlaylistSelector |
-            ActiveBlock::YoutubeSongSelector => self.youtube_column.handle_key_events(key_event, self.active_view),
-        }
-
-        match key_event.code {
-            KeyCode::Esc | KeyCode::Char('q') => {self.quit();}
-            KeyCode::Char('c') | 
-            KeyCode::Char('C') => {
-                if key_event.modifiers == KeyModifiers::CONTROL {
-                    self.quit();
-                }
-            }
-            KeyCode::Tab => {
-                self.active_view_switch();
-            }
-            KeyCode::Char('a') | 
-            KeyCode::Char('A') => {
-                if key_event.modifiers != KeyModifiers::CONTROL {
-                    self.handle_item_adding();
-                }
-            }
-            KeyCode::Char('h') => {
-                self.selective_refresh();
-            }
-            KeyCode::Delete => {self.handle_item_removing().await;}
-            KeyCode::Left => {
-                match self.active_view {
-                    ActiveBlock::YoutubePlaylistSelector => {
-                        self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "Not implemented. Please select playlists and move songs.\nYou can use Ctrl-A to move all songs".into()))
-                    },
-                    ActiveBlock::YoutubeSongSelector => {
-                        match (self.youtube_column.song_selector.get_selected_songs(), self.spotify_column.selected_playlist_id.clone()) {
-                            (Some(songs), Some(p_id)) => {
-                                if !songs.is_empty() {
-                                    self.spotify_column.add_found_songs(p_id, songs).await;
+                    PopupEvent::PopupCloseData(received_data) => {
+                        match &self.popup {
+                            PopupTyped::Spotify(popup) => {
+                                match popup {
+                                    PlatformPopup::AddSong(popup) => {
+                                        let found_songs = self.spotify_column.provider.search(received_data, 10).await;
+                                        self.popup = PopupTyped::Spotify(PlatformPopup::AddSongSelect(AddSongSelectionPopup::new(found_songs, popup.playlist_id.clone())));
+                                    },
+                                    PlatformPopup::AddSongSelect(popup) => {
+                                        self.spotify_column.provider.add_playlist_song(popup.playlist_id.clone(), Vec::from([received_data])).await;
+                                        self.selective_refresh();
+                                        self.popup = PopupTyped::None;
+                                    },
+                                    PlatformPopup::AddPlaylist(_) => {
+                                        self.spotify_column.provider.create_playlist(received_data).await;
+                                        self.spotify_column.refresh_playlists();
+                                        self.popup = PopupTyped::None;
+                                    },
                                 }
                             },
-                            (None, None) |
-                            (Some(_), None) => {
-                                self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a spotify playlist".into()))
-                            },
-                            (None, Some(_)) => {
-                                self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a songs from youtube playlist (use enter)".into()))
-                            }
-                        }
-                    },
-                    _ => ()
-                }
-            },
-            KeyCode::Right => {
-                match self.active_view {
-                    ActiveBlock::SpotifyPlaylistSelector => todo!(),
-                    ActiveBlock::SpotifySongSelector => {
-                        match (self.spotify_column.song_selector.get_selected_songs(), self.youtube_column.selected_playlist_id.clone()) {
-                            (Some(songs), Some(p_id)) => {
-                                if !songs.is_empty() {
-                                    self.youtube_column.add_found_songs(p_id, songs).await;
+                            PopupTyped::Youtube(popup) => {
+                                match popup {
+                                    PlatformPopup::AddSong(popup) => {
+                                        let found_songs = self.youtube_column.provider.search(received_data, 10).await;
+                                        self.popup = PopupTyped::Youtube(PlatformPopup::AddSongSelect(AddSongSelectionPopup::new(found_songs, popup.playlist_id.clone())));
+                                    },
+                                    PlatformPopup::AddSongSelect(popup) => {
+                                        self.youtube_column.provider.add_playlist_song(popup.playlist_id.clone(), Vec::from([received_data])).await;
+                                        self.selective_refresh();
+                                        self.popup = PopupTyped::None;
+                                    },
+                                    PlatformPopup::AddPlaylist(_) => {
+                                        self.youtube_column.provider.create_playlist(received_data).await;
+                                        self.youtube_column.refresh_playlists();
+                                        self.popup = PopupTyped::None;
+                                    },
                                 }
                             },
-                            (None, None) |
-                            (Some(_), None) => {
-                                self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a youtube playlist".into()))
+                            PopupTyped::Generic(popup) => {
+                                match popup {
+                                    GenericPopup::Message(_) => panic!("Not returning any data!"),
+                                }
                             },
-                            (None, Some(_)) => {
-                                self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a songs from spotify playlist (use enter)".into()))
-                            }
+                            PopupTyped::None => panic!("Not returning any data!"),
                         }
                     },
-                    _ => ()
                 }
-            }
-            _ => {}
+            },
+            true => {
+                match self.active_view {
+                    ActiveBlock::SpotifyPlaylistSelector |
+                    ActiveBlock::SpotifySongSelector => self.spotify_column.handle_key_events(key_event, self.active_view),
+                    ActiveBlock::YoutubePlaylistSelector |
+                    ActiveBlock::YoutubeSongSelector => self.youtube_column.handle_key_events(key_event, self.active_view),
+                }
+        
+                match key_event.code {
+                    KeyCode::Tab => {
+                        self.active_view_switch();
+                    }
+                    KeyCode::Char('a') | 
+                    KeyCode::Char('A') => {
+                        if key_event.modifiers != KeyModifiers::CONTROL {
+                            self.handle_item_adding();
+                        }
+                    }
+                    KeyCode::Char('h') => {
+                        self.selective_refresh();
+                    }
+                    KeyCode::Delete => {self.handle_item_removing().await;}
+                    KeyCode::Left => {
+                        match self.active_view {
+                            ActiveBlock::YoutubePlaylistSelector => {
+                                self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "Not implemented. Please select playlists and move songs.\nYou can use Ctrl-A to move all songs".into())))
+                            },
+                            ActiveBlock::YoutubeSongSelector => {
+                                let selected_songs = self.youtube_column.song_selector.get_selected();
+                                match (selected_songs.is_empty(), self.spotify_column.playlist_selector.get_selected().first()) {
+                                    (false, Some(playlist)) => {
+                                        let p_id = playlist.id.clone();
+                                        self.spotify_column.add_found_songs(p_id, selected_songs).await;
+                                    },
+                                    (true, None) |
+                                    (false, None) => {
+                                        self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a spotify playlist".into())))
+                                    },
+                                    (true, Some(_)) => {
+                                        self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a songs from youtube playlist (use enter)".into())))
+                                    }
+                                }
+                            },
+                            _ => ()
+                        }
+                    },
+                    KeyCode::Right => {
+                        match self.active_view {
+                            ActiveBlock::SpotifyPlaylistSelector => todo!(),
+                            ActiveBlock::SpotifySongSelector => {
+                                let selected_songs = self.spotify_column.song_selector.get_selected();
+                                match (selected_songs.is_empty(), self.youtube_column.playlist_selector.get_selected().first()) {
+                                    (false, Some(playlist)) => {
+                                        let p_id = playlist.id.clone();
+                                        self.youtube_column.add_found_songs(p_id, selected_songs).await;
+                                    },
+                                    (true, None) |
+                                    (false, None) => {
+                                        self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a youtube playlist".into())))
+                                    },
+                                    (true, Some(_)) => {
+                                        self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a songs from spotify playlist (use enter)".into())))
+                                    }
+                                }
+                            },
+                            _ => ()
+                        }
+                    }
+                    _ => {}
+                }
+            },
         }
-
-        Ok(())
     }
 
     pub fn handle_item_adding(&mut self) {
-        match self.active_view {
+        self.popup = match self.active_view {
             ActiveBlock::SpotifyPlaylistSelector => {
-                self.popup = PopupTyped::Spotify(Popup::AddPlaylist(AddPlaylistPopup::new(self.spotify_column.provider.clone())))
+                PopupTyped::Spotify(PlatformPopup::AddPlaylist(AddPlaylistPopup::new()))
             },
             ActiveBlock::YoutubePlaylistSelector => {
-                self.popup = PopupTyped::Youtube(Popup::AddPlaylist(AddPlaylistPopup::new(self.youtube_column.provider.clone())))
+                PopupTyped::Youtube(PlatformPopup::AddPlaylist(AddPlaylistPopup::new()))
             },
             ActiveBlock::SpotifySongSelector => {
-                if let Some(playlists) = self.spotify_column.playlist_selector.get_selected_songs() {
-                    if let Some(playlist) = playlists.first() {
-                        if playlist.owned {
-                            self.popup = match self.spotify_column.selected_playlist_id.clone() {
-                                Some(playlist_id) => {
-                                    PopupTyped::Spotify(Popup::AddSong(AddSongPopup::<SpotifyProvider>::new(self.spotify_column.provider.clone(), playlist_id.clone())))
-                                },
-                                None => {
-                                    PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a spotify playlist".into()))
-                                },
-                            }
-                        } else {
-                            self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "Missing permissions to modify playlist".to_string()))
+                match self.spotify_column.playlist_selector.get_selected().first() {
+                    Some(playlist) => {
+                        match playlist.owned {
+                            true => PopupTyped::Spotify(PlatformPopup::AddSong(AddSongPopup::new(playlist.id.clone()))),
+                            false => PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "Missing permissions to modify playlist".to_string()))),
                         }
-                    }
+                    },
+                    None => PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a spotify playlist".into()))),
                 }
             },
             ActiveBlock::YoutubeSongSelector => {
-                self.popup = match self.youtube_column.selected_playlist_id.clone() {
-                    Some(playlist_id) => {
-                        PopupTyped::Youtube(Popup::AddSong(AddSongPopup::<YoutubeProvider>::new(self.youtube_column.provider.clone(), playlist_id.clone())))
+                match self.youtube_column.playlist_selector.get_selected().first() {
+                    Some(playlist) => {
+                        match playlist.owned {
+                            true => PopupTyped::Youtube(PlatformPopup::AddSong(AddSongPopup::new(playlist.id.clone()))),
+                            false => PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "Missing permissions to modify playlist".to_string()))),
+                        }
                     },
-                    None => {
-                        PopupTyped::Message(MessagePopup::new("Error".into(), "You must choose a youtube playlist".into()))
-                    },
+                    None => PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "You must choose a spotify playlist".into()))),
                 }
             },
         }
@@ -241,34 +242,38 @@ impl App {
         match self.active_view {
             ActiveBlock::SpotifyPlaylistSelector |
             ActiveBlock::YoutubePlaylistSelector => {
-                self.popup = PopupTyped::Message(MessagePopup::new("Error".into(), "Deleting of playlists not implemented for my own sanity".to_string()));
+                self.popup = PopupTyped::Generic(GenericPopup::Message(MessagePopup::new("Error".into(), "Deleting of playlists not implemented for my own sanity".to_string())));
             },
             ActiveBlock::SpotifySongSelector => {
-                if let Some(songs) =  self.spotify_column.song_selector.get_selected_songs() {
-                    if let Some(playlist) = self.spotify_column.playlist_selector.get_selected_songs() {
-                        if let Some(playlist) = playlist.first() {
-                            if playlist.owned && !songs.is_empty() {
-                                let song_ids = songs.iter().map(|item| item.id.clone()).collect::<Vec<String>>();
-                                self.spotify_column.provider.rem_playlist_song(playlist.id.clone(), song_ids).await;
-                                self.spotify_column.song_selector.clear_selected();
-                                self.spotify_column.refresh_songs();
-                            }
+                let selected_songs = self.spotify_column.song_selector.get_selected();
+                if !selected_songs.is_empty() {
+                    if let Some(playlist) = self.spotify_column.playlist_selector.get_selected().first() {
+                        if playlist.owned {
+                            let song_ids = selected_songs.iter().map(|item| item.id.clone()).collect::<Vec<String>>();
+                            self.spotify_column.provider.rem_playlist_song(playlist.id.clone(), song_ids).await;
+                            self.spotify_column.song_selector.clear_selected();
+                            self.spotify_column.refresh_songs();
                         }
                     }
                 }
             },
             ActiveBlock::YoutubeSongSelector => {
-                if let Some(songs) =  self.youtube_column.song_selector.get_selected_songs() {
-                    let song_ids = songs.iter().map(|item| {
-                        match &item.r#type {
-                            crate::types::music_types::RSyncSongProviderData::Youtube(data) => data.playlist_id.as_ref().unwrap().clone(),
-                            crate::types::music_types::RSyncSongProviderData::Spotify => panic!("Spotify song in youtube playlist"),
+                let selected_songs = self.youtube_column.song_selector.get_selected();
+                if !selected_songs.is_empty() {
+                    if let Some(playlist) = self.youtube_column.playlist_selector.get_selected().first() {
+                        if playlist.owned {
+                            let song_ids = selected_songs.iter().map(|item| {
+                                match &item.r#type {
+                                    crate::types::music_types::RSyncSongProviderData::Youtube(data) => data.playlist_id.as_ref().unwrap().clone(),
+                                    crate::types::music_types::RSyncSongProviderData::Spotify => panic!("Spotify song in youtube playlist"),
+                                }
+                            }).collect::<Vec<String>>();
+                            
+                            self.youtube_column.provider.rem_playlist_song(playlist.id.clone(), song_ids).await;
+                            self.youtube_column.song_selector.clear_selected();
+                            self.youtube_column.refresh_songs();
                         }
-                    }).collect::<Vec<String>>();
-                    
-                    self.youtube_column.provider.rem_playlist_song(self.youtube_column.selected_playlist_id.as_ref().unwrap().clone(), song_ids).await;
-                    self.spotify_column.song_selector.clear_selected();
-                    self.youtube_column.refresh_songs();
+                    }
                 }
             },
         }
@@ -305,6 +310,19 @@ impl App {
                 self.spotify_column.playlist_selector.active = true;
                 ActiveBlock::SpotifyPlaylistSelector
             },
+        }
+    }
+
+    pub fn check_close_key(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Esc | KeyCode::Char('q') => self.quit(),
+            KeyCode::Char('c') | 
+            KeyCode::Char('C') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    self.quit();
+                }
+            }
+            _ => {}
         }
     }
 }

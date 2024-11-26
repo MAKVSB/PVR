@@ -3,25 +3,17 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Rect}, widgets::Clear, Frame
 };
 
-use crate::{providers::provider_traits::APIProvider, widgets::generic::user_input::{UserInput, UserInputKeyEvent}};
+use crate::widgets::generic::user_input::{UserInput, UserInputKeyEvent};
 
 use super::popup::PopupEvent;
 
 #[derive(Debug)]
-pub struct AddPlaylistPopup<T>
-where 
-    T: APIProvider + Clone
-{
-    pub provider: T,
+pub struct AddPlaylistPopup {
     pub user_input: UserInput,
 }
-impl<T> AddPlaylistPopup<T> 
-where 
-    T: APIProvider + Clone
-{
-    pub fn new(provider: T) -> Self {
+impl AddPlaylistPopup {
+    pub fn new() -> Self {
         Self {
-            provider,
             user_input: UserInput::new(true),
         }
     }
@@ -41,13 +33,12 @@ where
         self.user_input.render(frame, area);
     }
 
-    pub async fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent<T> {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent {
         match self.user_input.handle_key_events(key_event) {
             UserInputKeyEvent::None => return PopupEvent::None,
             UserInputKeyEvent::Pass => {}, //pass keypress to next parser
             UserInputKeyEvent::Data(playlist_name) => {
-                self.provider.create_playlist(playlist_name).await;
-                return PopupEvent::PopupCloseRefresh;
+                return PopupEvent::PopupCloseData(playlist_name);
             },
         }
 
