@@ -7,9 +7,15 @@ use tokio::sync::mpsc;
 use crate::{app::AppResult, types::music_types::{RSyncPlaylistItem, RSyncSong}};
 
 #[derive(Clone, Debug)]
+pub enum GlobalEventDataFullfilness<T> {
+  Partial(T),
+  Full(T),
+}
+
+#[derive(Clone, Debug)]
 pub enum GlobalEventData {
-  Playlists(Option<Vec<RSyncPlaylistItem>>),
-  Songs(Option<Vec<RSyncSong>>)
+  Playlists(GlobalEventDataFullfilness<Vec<RSyncPlaylistItem>>),
+  Songs(GlobalEventDataFullfilness<Vec<RSyncSong>>)
 }
 
 #[derive(Clone, Debug)]
@@ -31,7 +37,7 @@ pub enum Event {
     /// Terminal resize.
     Resize(u16, u16),
     /// Received data from thread
-    DataReceived(GlobalEvent)
+    DataReceived(u128, GlobalEvent)
 }
 
 /// Terminal event handler.

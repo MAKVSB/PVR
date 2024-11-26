@@ -1,10 +1,10 @@
 use spotify_rs::{model::{playlist::SimplifiedPlaylist, track::Track, PlayableItem}, AuthCodeClient, RedirectUrl, Token};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use std::{collections::HashMap, env, sync::{Arc, Mutex}};
 use warp::Filter;
 use webbrowser;
 
-use crate::types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncPlaylistItemProviderData, RSyncPlaylistItemProviderDataSpotify, RSyncSong, RSyncSongProviderData};
+use crate::{event::{Event, GlobalEvent, GlobalEventData, GlobalEventDataFullfilness}, types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncPlaylistItemProviderData, RSyncPlaylistItemProviderDataSpotify, RSyncSong, RSyncSongProviderData}};
 
 use super::provider_traits::{APIProvider, APIProviderBuilder};
 
@@ -200,7 +200,7 @@ impl APIProvider for SpotifyProvider {
         playlists
     }
 
-    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper) -> Vec<RSyncSong> {
+    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper, event_sender: Option<(mpsc::UnboundedSender<Event>, u128)>) -> Vec<RSyncSong> {
         match playlist_id {
             PlaylistIdWrapper::Liked => {
                 let mut total= None;
@@ -210,17 +210,24 @@ impl APIProvider for SpotifyProvider {
         
                 loop {
                     let response = spotify_rs::saved_tracks().limit(per_request).offset(offset).get(&self.client).await.unwrap();
+                    let mut songs_inner: Vec<RSyncSong> = Vec::new();
                     if total.is_none() {
                         total = Some(response.total);
                     }
                     offset += per_request;
         
                     for playlist_track in response.items {
-                        songs.push(playlist_track.unwrap().track.into());
+                        songs_inner.push(playlist_track.unwrap().track.into());
                     }
+                    
                     if offset > total.unwrap() {
                         break;
                     }
+
+                    if let Some(event_sender) = event_sender.clone() {
+                        event_sender.0.send(Event::DataReceived(event_sender.1, GlobalEvent::Spotify(GlobalEventData::Songs(GlobalEventDataFullfilness::Partial(songs_inner.clone()))))).unwrap();
+                    }
+                    songs.append(&mut songs_inner);
                 }
                 songs
             },

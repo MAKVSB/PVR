@@ -1,10 +1,12 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Layout, Rect}, Frame
 };
 use tokio::sync::mpsc;
 
-use crate::{app::ActiveBlock, event::{Event, GlobalEvent, GlobalEventData}, providers::{provider_traits::APIProvider, youtube_provider::YoutubeProvider}, types::{music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}, playlist_selector_key_event_response::SelectorKeyEventResponse}};
+use crate::{app::ActiveBlock, event::{Event, GlobalEvent, GlobalEventData, GlobalEventDataFullfilness}, providers::{provider_traits::APIProvider, youtube_provider::YoutubeProvider}, types::{music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}, playlist_selector_key_event_response::SelectorKeyEventResponse}};
 
 use super::{playlist_selector::PlaylistSelector, song_selector::SongSelector};
 
@@ -15,6 +17,8 @@ pub struct YoutubeColumn {
     pub song_selector: SongSelector,
     render_rows: Layout,
     global_event_sender: mpsc::UnboundedSender<Event>,
+    last_songs_request_id: u128,
+    last_playlists_request_id: u128,
 }
 impl YoutubeColumn {
     pub fn new(provider: YoutubeProvider, global_event_sender: mpsc::UnboundedSender<Event>) -> Self {
@@ -27,28 +31,37 @@ impl YoutubeColumn {
                 Constraint::Percentage(60),
             ]),
             global_event_sender,
+            last_playlists_request_id: 0,
+            last_songs_request_id: 0,
         };
-        s.refresh_playlists();
+        // s.refresh_playlists();
         s
     }
 
     pub fn refresh_songs(&mut self) {
+        self.song_selector.set_items(None);
         if let Some(playlist) = self.playlist_selector.get_selected().first() {
             let p_id = playlist.id.clone();
             self.song_selector.set_loading();
             let mut provider_clone = self.provider.clone();
             let event_sender = self.global_event_sender.clone();
+            let request_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+            self.last_songs_request_id = request_id;
             tokio::spawn(async move {
-                let a = provider_clone.get_playlist_songs(p_id).await;
+                let a = provider_clone.get_playlist_songs(p_id, Some((event_sender.clone(), request_id))).await;
                 event_sender.send(
-                    Event::DataReceived(
+                    Event::DataReceived(request_id,
                         GlobalEvent::Youtube(
-                            GlobalEventData::Songs(Some(a))
+                            GlobalEventData::Songs(crate::event::GlobalEventDataFullfilness::Full(a))
                         )
                     )
                 )
             });
         }
+    }
+
+    pub fn append_songs(&mut self, items: Vec<RSyncSong>) {
+        self.song_selector.append_items(items);
     }
 
     pub fn set_songs(&mut self, items: Option<Vec<RSyncSong>>) {
@@ -57,40 +70,31 @@ impl YoutubeColumn {
     }
 
     pub fn refresh_playlists(&mut self) {
+        self.playlist_selector.set_items(None);
         self.playlist_selector.set_loading();
         let mut provider_clone = self.provider.clone();
         let event_sender = self.global_event_sender.clone();
+        let request_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        self.last_playlists_request_id = request_id;
         tokio::spawn(async move {
             let a = provider_clone.get_playlists().await;
             event_sender.send(
-                Event::DataReceived(
+                Event::DataReceived(request_id, 
                     GlobalEvent::Youtube(
-                        GlobalEventData::Playlists(Some(a))
+                        GlobalEventData::Playlists(GlobalEventDataFullfilness::Full(a))
                     )
                 )
             )
         });
+    }
+
+    pub fn append_playlists(&mut self, items: Vec<RSyncPlaylistItem>) {
+        self.playlist_selector.append_items(items);
     }
 
     pub fn set_playlists(&mut self, items: Option<Vec<RSyncPlaylistItem>>) {
         self.playlist_selector.set_items(items);
         self.playlist_selector.clear_selected();
-    }
-
-    pub fn select_playlist(&mut self, playlist_id: PlaylistIdWrapper) {
-        self.song_selector.set_loading();
-        let mut provider_clone = self.provider.clone();
-        let event_sender = self.global_event_sender.clone();
-        tokio::spawn(async move {
-            let a = provider_clone.get_playlist_songs(playlist_id).await;
-            event_sender.send(
-                Event::DataReceived(
-                    GlobalEvent::Youtube(
-                        GlobalEventData::Songs(Some(a))
-                    )
-                )
-            )
-        });
     }
 
     pub async fn add_found_songs(&mut self, p_id: PlaylistIdWrapper, songs:Vec<&RSyncSong>) {
@@ -106,10 +110,25 @@ impl YoutubeColumn {
         self.song_selector.render(frame, song_selection_area);
     }
 
-    pub fn handle_received_data(&mut self, data: GlobalEventData) {
+    pub fn handle_received_data(&mut self, request_id: u128, data: GlobalEventData) {
         match data {
-            GlobalEventData::Playlists(vec) => self.set_playlists(vec),
-            GlobalEventData::Songs(vec) => self.set_songs(vec),
+            GlobalEventData::Playlists(event_data) => {
+                if request_id == self.last_playlists_request_id {
+                    match event_data {
+                        GlobalEventDataFullfilness::Partial(vec) => self.append_playlists(vec),
+                        GlobalEventDataFullfilness::Full(vec) => self.set_playlists(Some(vec)),
+                    }
+                }
+            }
+
+            GlobalEventData::Songs(event_data) => {
+                if request_id == self.last_songs_request_id {
+                    match event_data {
+                        GlobalEventDataFullfilness::Partial(vec) => self.append_songs(vec),
+                        GlobalEventDataFullfilness::Full(vec) => self.set_songs(Some(vec)),
+                    }
+                }
+            }
         }
     }
 
@@ -117,7 +136,7 @@ impl YoutubeColumn {
         match active_block {
             ActiveBlock::YoutubePlaylistSelector => {
                 match self.playlist_selector.handle_key_events(key_event) {
-                    SelectorKeyEventResponse::Selected(playlist_id) => {self.select_playlist(playlist_id);},
+                    SelectorKeyEventResponse::Selected(_) => {self.refresh_songs();},
                     SelectorKeyEventResponse::Refresh => {self.refresh_playlists();},
                     SelectorKeyEventResponse::None => (),
                     SelectorKeyEventResponse::Pass => {},

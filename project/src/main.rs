@@ -47,7 +47,7 @@ async fn main() -> AppResult<()> {
             Event::Key(key_event) => app.handle_key_events(key_event).await,
             Event::Mouse(_) => {}
             Event::Resize(_, _) => {}
-            Event::DataReceived(data) => app.handle_received_data(data),
+            Event::DataReceived(request_id, data) => app.handle_received_data(request_id, data),
         }
     }
 

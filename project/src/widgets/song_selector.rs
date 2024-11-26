@@ -33,6 +33,10 @@ impl SongSelector {
         self.selector.clear_selected();
     }
 
+    pub fn append_items(&mut self, items: Vec<RSyncSong>) {
+        self.selector.append_items(items);
+    }
+
     pub fn set_items(&mut self, items: Option<Vec<RSyncSong>>) {
         self.selector.set_items(items);
     }

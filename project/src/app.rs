@@ -58,11 +58,11 @@ impl App {
         self.running = false;
     }
 
-    pub fn handle_received_data(&mut self, data: GlobalEvent) {
+    pub fn handle_received_data(&mut self, request_id: u128, data: GlobalEvent) {
         match data {
             GlobalEvent::Generic(_global_event_data) => {},
-            GlobalEvent::Spotify(global_event_data) => self.spotify_column.handle_received_data(global_event_data),
-            GlobalEvent::Youtube(global_event_data) => self.youtube_column.handle_received_data(global_event_data),
+            GlobalEvent::Spotify(global_event_data) => self.spotify_column.handle_received_data(request_id, global_event_data),
+            GlobalEvent::Youtube(global_event_data) => self.youtube_column.handle_received_data(request_id, global_event_data),
         }
     }
 

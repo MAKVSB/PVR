@@ -1,4 +1,6 @@
-use crate::types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong};
+use tokio::sync::mpsc;
+
+use crate::{event::Event, types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}};
 
 pub trait APIProviderBuilder {
     #[allow(async_fn_in_trait)]
@@ -13,7 +15,7 @@ pub trait APIProvider {
     async fn get_playlists(&mut self) -> Vec<RSyncPlaylistItem>;
 
     #[allow(async_fn_in_trait)]
-    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper) -> Vec<RSyncSong>;
+    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper, event_sender: Option<(mpsc::UnboundedSender<Event>, u128)>) -> Vec<RSyncSong>;
 
     #[allow(async_fn_in_trait)]
     async fn create_playlist(&mut self, playlist_name: String);

@@ -31,7 +31,7 @@ where
 }
 impl<T> ListSelector<T>
 where
-    T: Into<Text<'static>> + Clone,
+    T: Into<Text<'static>> + Clone + std::fmt::Debug,
 {
     pub fn new(items: Option<Vec<T>>, labels: ListSelectorLabels, allow_multiple: bool) -> Self {
         Self {
@@ -71,6 +71,15 @@ where
 
     pub fn clear_selected(&mut self) {
         self.selected.clear();
+    }
+
+    pub fn append_items(&mut self, items: Vec<T>) {
+        self.loading = false;
+        if self.items.is_none() {
+            self.items = Some(items);
+            return
+        }
+        self.items.as_mut().unwrap().append(&mut items.clone());
     }
 
     pub fn set_items(&mut self, items: Option<Vec<T>>) {
