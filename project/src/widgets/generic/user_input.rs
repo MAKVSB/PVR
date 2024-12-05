@@ -1,13 +1,16 @@
-use crossterm::event::{KeyCode, KeyEvent, };
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Position, Rect}, style::{Color, Style}, widgets::{Block, Paragraph}, Frame
+    layout::{Position, Rect},
+    style::{Color, Style},
+    widgets::{Block, Paragraph},
+    Frame,
 };
 
 #[derive(Debug)]
 pub enum UserInputKeyEvent {
     None,
     Pass,
-    Data(String)
+    Data(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -91,7 +94,7 @@ impl UserInput {
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
-        let input =  Paragraph::new(self.input.as_str())
+        let input = Paragraph::new(self.input.as_str())
             .style(Style::default().fg(Color::Yellow))
             .block(Block::bordered().title("Input song same")); // Block::bordered().title(self.input.clone());
         frame.render_widget(input, area);
@@ -106,32 +109,30 @@ impl UserInput {
 
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> UserInputKeyEvent {
         match key_event.code {
-            KeyCode::Enter => {
-                UserInputKeyEvent::Data(self.submit_message())
-            },
+            KeyCode::Enter => UserInputKeyEvent::Data(self.submit_message()),
             KeyCode::Char(to_insert) => {
                 self.enter_char(to_insert);
                 match self.require_enter {
                     true => UserInputKeyEvent::None,
                     false => UserInputKeyEvent::Data(self.input.clone()),
                 }
-            },
+            }
             KeyCode::Backspace => {
                 self.delete_char();
                 match self.require_enter {
                     true => UserInputKeyEvent::None,
                     false => UserInputKeyEvent::Data(self.input.clone()),
                 }
-            },
+            }
             KeyCode::Left => {
                 self.move_cursor_left();
                 UserInputKeyEvent::None
-            },
+            }
             KeyCode::Right => {
                 self.move_cursor_right();
                 UserInputKeyEvent::None
-            },
-            _ => UserInputKeyEvent::Pass
+            }
+            _ => UserInputKeyEvent::Pass,
         }
     }
 }

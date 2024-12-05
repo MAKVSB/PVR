@@ -1,34 +1,42 @@
+use std::future::Future;
+
 use tokio::sync::mpsc;
 
-use crate::{event::Event, types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong}};
+use crate::{
+    event::Event,
+    types::music_types::{PlaylistIdWrapper, RSyncPlaylistItem, RSyncSong},
+};
 
 pub trait APIProviderBuilder {
-    #[allow(async_fn_in_trait)]
-    async fn authorize(&mut self) -> impl APIProvider;
+    fn authorize(&mut self) -> impl Future<Output = impl APIProvider>;
 }
 
 pub trait APIProvider {
-    #[allow(async_fn_in_trait)]
-    async fn new() -> Self;
+    fn new() -> impl Future<Output = impl APIProvider>;
 
-    #[allow(async_fn_in_trait)]
-    async fn get_playlists(&mut self) -> Vec<RSyncPlaylistItem>;
+    fn get_playlists(&mut self) -> impl Future<Output = Vec<RSyncPlaylistItem>>;
 
-    #[allow(async_fn_in_trait)]
-    async fn get_playlist_songs(&mut self, playlist_id: PlaylistIdWrapper, event_sender: Option<(mpsc::UnboundedSender<Event>, u128)>) -> Vec<RSyncSong>;
+    fn get_playlist_songs(
+        &mut self,
+        playlist_id: PlaylistIdWrapper,
+        event_sender: Option<(mpsc::UnboundedSender<Event>, u128)>,
+    ) -> impl Future<Output = Vec<RSyncSong>>;
 
-    #[allow(async_fn_in_trait)]
-    async fn create_playlist(&mut self, playlist_name: String);
+    fn create_playlist(&mut self, playlist_name: String) -> impl Future<Output = ()>;
 
-    #[allow(async_fn_in_trait)]
-    async fn add_playlist_song(&mut self, playlist_id: PlaylistIdWrapper, song_id: Vec<String>);
+    fn add_playlist_song(
+        &mut self,
+        playlist_id: PlaylistIdWrapper,
+        song_id: Vec<String>,
+    ) -> impl Future<Output = ()>;
 
-    #[allow(async_fn_in_trait)]
-    async fn rem_playlist_song(&mut self, playlist_id: PlaylistIdWrapper, song_ids: Vec<String>);
+    fn rem_playlist_song(
+        &mut self,
+        playlist_id: PlaylistIdWrapper,
+        song_ids: Vec<String>,
+    ) -> impl Future<Output = ()>;
 
-    #[allow(async_fn_in_trait)]
-    async fn search(&mut self, query: String, limit: u32) -> Vec<RSyncSong>;
-    
-    #[allow(async_fn_in_trait)]
-    async fn search_list(&mut self, items: Vec<&RSyncSong>) -> Vec<RSyncSong>;
+    fn search(&mut self, query: String, limit: u32) -> impl Future<Output = Vec<RSyncSong>>;
+
+    fn search_list(&mut self, items: Vec<RSyncSong>) -> impl Future<Output = Vec<RSyncSong>>;
 }

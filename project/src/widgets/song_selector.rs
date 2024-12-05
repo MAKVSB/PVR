@@ -1,16 +1,16 @@
-use crossterm::event::{KeyCode, KeyEvent, };
-use ratatui::{
-    layout::Rect, widgets::ListState, Frame
-};
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{layout::Rect, widgets::ListState, Frame};
 
-use crate::types::{music_types::RSyncSong, playlist_selector_key_event_response::SelectorKeyEventResponse};
+use crate::types::{
+    music_types::RSyncSong, playlist_selector_key_event_response::SelectorKeyEventResponse,
+};
 
 use super::generic::list_selector::{ListSelector, ListSelectorKeyResponse, ListSelectorLabels};
 
 #[derive(Debug)]
 pub struct SongSelector {
     pub active: bool,
-    pub selector: ListSelector<RSyncSong>
+    pub selector: ListSelector<RSyncSong>,
 }
 impl SongSelector {
     pub fn new(title: String) -> Self {
@@ -18,14 +18,18 @@ impl SongSelector {
         st.select(Some(0));
         Self {
             active: false,
-            selector: ListSelector::new(None, ListSelectorLabels {
-                empty: "Waiting for playlist to be selected".into(),
-                title,
-            }, true)
+            selector: ListSelector::new(
+                None,
+                ListSelectorLabels {
+                    empty: "Waiting for playlist to be selected".into(),
+                    title,
+                },
+                true,
+            ),
         }
     }
-    
-    pub fn get_selected(&mut self) -> Vec<&RSyncSong>{
+
+    pub fn get_selected(&mut self) -> Vec<&RSyncSong> {
         self.selector.get_selected_items()
     }
 
@@ -58,16 +62,14 @@ impl SongSelector {
         };
 
         match key_event.code {
-            KeyCode::Char('r') => {
-                SelectorKeyEventResponse::Refresh
-            }
+            KeyCode::Char('r') => SelectorKeyEventResponse::Refresh,
             KeyCode::Char('o') => {
                 if let Some(item) = self.selector.get_cursor_item() {
                     let _ = webbrowser::open(item.url.as_str());
                 }
                 SelectorKeyEventResponse::None
             }
-            _ => SelectorKeyEventResponse::Pass
+            _ => SelectorKeyEventResponse::Pass,
         }
     }
 }

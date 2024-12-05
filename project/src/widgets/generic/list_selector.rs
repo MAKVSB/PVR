@@ -1,6 +1,10 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, };
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Rect}, style::{Color, Style, Stylize}, text::Text, widgets::{Block, BorderType, List, ListItem, ListState, Paragraph}, Frame
+    layout::{Alignment, Rect},
+    style::{Color, Style, Stylize},
+    text::Text,
+    widgets::{Block, BorderType, List, ListItem, ListState, Paragraph},
+    Frame,
 };
 
 #[derive(Debug)]
@@ -43,29 +47,27 @@ where
             loading: false,
         }
     }
-    
-    pub fn get_selected_items(&mut self) -> Vec<&T>{
+
+    pub fn get_selected_items(&mut self) -> Vec<&T> {
         match &self.items {
-            Some(items) => {
-                items.iter().enumerate()
-                    .filter(|(i, _item)| self.selected.contains(i))
-                    .map(|(_i, item)| item)
-                    .collect::<Vec<&T>>()
-                    .clone()
-            },
+            Some(items) => items
+                .iter()
+                .enumerate()
+                .filter(|(i, _item)| self.selected.contains(i))
+                .map(|(_i, item)| item)
+                .collect::<Vec<&T>>()
+                .clone(),
             None => Vec::new(),
         }
     }
 
-    pub fn get_cursor_item(&mut self) -> Option<&T>{
+    pub fn get_cursor_item(&mut self) -> Option<&T> {
         match self.state.selected() {
-            Some(i) => {
-                match &self.items {
-                    Some(data) => Some(&data[i]),
-                    None => None,
-                }
+            Some(i) => match &self.items {
+                Some(data) => Some(&data[i]),
+                None => None,
             },
-            None => {None},
+            None => None,
         }
     }
 
@@ -78,7 +80,7 @@ where
         self.loading = false;
         if self.items.is_none() {
             self.items = Some(items);
-            return
+            return;
         }
         self.items.as_mut().unwrap().append(&mut items.clone());
     }
@@ -107,41 +109,6 @@ where
 
         if self.loading {
             let par = Paragraph::new("Loading...")
-            .block(
-                Block::bordered()
-                    .title(self.labels.title.as_ref())
-                    .title_alignment(Alignment::Center)
-                    .border_type(BorderType::Rounded)
-                    .border_style(border_style),
-            )
-            .style(Style::default().fg(Color::Cyan).bg(Color::Black))
-            .centered();
-            frame.render_widget(par, area);
-            return;
-        }
-        
-        match self.items.as_ref() {
-            Some(playlist_data) => {
-                let items = playlist_data.iter()
-                .enumerate()
-                .map(|(i, playlist)| {
-                    if self.selected.contains(&i) {
-                        ListItem::from(playlist.clone()).bg(Color::Cyan).fg(Color::Black)
-                    } else {
-                        ListItem::from(playlist.clone()).bg(Color::Black).fg(Color::Cyan)
-                    }
-                })
-                .collect::<Vec<ListItem>>();
-            let list = List::new(items)
-                .block(block)
-                .style(Style::default().fg(Color::Cyan).bg(Color::Black))
-                .highlight_style(Style::new().italic())
-                .highlight_symbol(">>")
-                .repeat_highlight_symbol(true);
-            frame.render_stateful_widget(list, area, &mut self.state);
-            },
-            None => {
-                let par = Paragraph::new(self.labels.empty.clone())
                 .block(
                     Block::bordered()
                         .title(self.labels.title.as_ref())
@@ -151,8 +118,48 @@ where
                 )
                 .style(Style::default().fg(Color::Cyan).bg(Color::Black))
                 .centered();
+            frame.render_widget(par, area);
+            return;
+        }
+
+        match self.items.as_ref() {
+            Some(playlist_data) => {
+                let items = playlist_data
+                    .iter()
+                    .enumerate()
+                    .map(|(i, playlist)| {
+                        if self.selected.contains(&i) {
+                            ListItem::from(playlist.clone())
+                                .bg(Color::Cyan)
+                                .fg(Color::Black)
+                        } else {
+                            ListItem::from(playlist.clone())
+                                .bg(Color::Black)
+                                .fg(Color::Cyan)
+                        }
+                    })
+                    .collect::<Vec<ListItem>>();
+                let list = List::new(items)
+                    .block(block)
+                    .style(Style::default().fg(Color::Cyan).bg(Color::Black))
+                    .highlight_style(Style::new().italic())
+                    .highlight_symbol(">>")
+                    .repeat_highlight_symbol(true);
+                frame.render_stateful_widget(list, area, &mut self.state);
+            }
+            None => {
+                let par = Paragraph::new(self.labels.empty.clone())
+                    .block(
+                        Block::bordered()
+                            .title(self.labels.title.as_ref())
+                            .title_alignment(Alignment::Center)
+                            .border_type(BorderType::Rounded)
+                            .border_style(border_style),
+                    )
+                    .style(Style::default().fg(Color::Cyan).bg(Color::Black))
+                    .centered();
                 frame.render_widget(par, area);
-            },
+            }
         };
     }
 
@@ -182,23 +189,23 @@ where
                             match pos {
                                 Some(pos) => {
                                     self.selected.swap_remove(pos);
-                                },
+                                }
                                 None => {
                                     self.selected.push(val);
-                                },
+                                }
                             }
-                        },
+                        }
                         false => {
                             self.selected.clear();
                             self.selected.push(val);
-                        },
+                        }
                     }
                     ListSelectorKeyResponse::Selected
                 } else {
                     ListSelectorKeyResponse::None
                 }
             }
-            _ => ListSelectorKeyResponse::Pass
+            _ => ListSelectorKeyResponse::Pass,
         }
     }
 }

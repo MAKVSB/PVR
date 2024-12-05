@@ -4,25 +4,40 @@ use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
-use crate::{app::AppResult, types::music_types::{RSyncPlaylistItem, RSyncSong}};
+use crate::{
+    app::AppResult,
+    types::music_types::{RSyncPlaylistItem, RSyncSong},
+};
 
 #[derive(Clone, Debug)]
 pub enum GlobalEventDataFullfilness<T> {
-  Partial(T),
-  Full(T),
+    Partial(T),
+    Full(T),
+}
+
+#[derive(Clone, Debug)]
+pub enum TransferUpdateEventData {
+    Searching,
+    Updating,
+    Finished,
+}
+
+#[derive(Clone, Debug)]
+pub enum GlobalGenericEventData {
+    TransferUpdate(TransferUpdateEventData),
 }
 
 #[derive(Clone, Debug)]
 pub enum GlobalEventData {
-  Playlists(GlobalEventDataFullfilness<Vec<RSyncPlaylistItem>>),
-  Songs(GlobalEventDataFullfilness<Vec<RSyncSong>>)
+    Playlists(GlobalEventDataFullfilness<Vec<RSyncPlaylistItem>>),
+    Songs(GlobalEventDataFullfilness<Vec<RSyncSong>>),
 }
 
 #[derive(Clone, Debug)]
 pub enum GlobalEvent {
-  Generic(GlobalEventData),
-  Spotify(GlobalEventData),
-  Youtube(GlobalEventData),
+    Generic(GlobalGenericEventData),
+    Spotify(GlobalEventData),
+    Youtube(GlobalEventData),
 }
 
 /// Terminal events.
@@ -37,7 +52,7 @@ pub enum Event {
     /// Terminal resize.
     Resize(u16, u16),
     /// Received data from thread
-    DataReceived(u128, GlobalEvent)
+    DataReceived(u128, GlobalEvent),
 }
 
 /// Terminal event handler.
@@ -117,6 +132,6 @@ impl EventHandler {
     }
 
     pub fn get_sender(&self) -> mpsc::UnboundedSender<Event> {
-      self.sender.clone()
+        self.sender.clone()
     }
 }

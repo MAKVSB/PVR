@@ -1,6 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect}, widgets::{Block, Clear, Paragraph}, Frame
+    layout::{Constraint, Flex, Layout, Rect},
+    widgets::{Block, Clear, Paragraph},
+    Frame,
 };
 
 use super::popup::PopupEvent;
@@ -12,17 +14,15 @@ pub struct MessagePopup {
 }
 impl MessagePopup {
     pub fn new(title: String, message: String) -> Self {
-        Self {
-            title,
-            message,
-        }
+        Self { title, message }
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         /// helper function to create a centered rect using up certain percentage of the available rect `r`
         fn popup_area(area: Rect, percent_x: u16, size_y: u16) -> Rect {
             let vertical = Layout::vertical([Constraint::Length(size_y)]).flex(Flex::Center);
-            let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+            let horizontal =
+                Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
             let [area] = vertical.areas(area);
             let [area] = horizontal.areas(area);
             area
@@ -36,10 +36,10 @@ impl MessagePopup {
         frame.render_widget(block, area);
     }
 
-    pub fn handle_key_events(&mut self, key_event: KeyEvent)-> PopupEvent {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> PopupEvent {
         match key_event.code {
             KeyCode::Esc | KeyCode::Enter => PopupEvent::PopupClose,
-            _ => PopupEvent::None
+            _ => PopupEvent::None,
         }
     }
 }

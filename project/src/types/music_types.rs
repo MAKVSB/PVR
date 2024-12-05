@@ -12,10 +12,9 @@ pub enum RSyncSongProviderData {
     Spotify,
 }
 
-
 #[derive(Clone, Debug)]
 pub struct RSyncPlaylistItemProviderDataSpotify {
-    pub snapshot_id: String
+    pub snapshot_id: String,
 }
 
 #[derive(Clone, Debug)]
@@ -35,12 +34,12 @@ pub struct RSyncPlaylistItem {
     pub collaborative: bool,
     pub description: Option<String>,
     pub url: String,
-    pub id: PlaylistIdWrapper, // liked songs are "favorite" with string 
+    pub id: PlaylistIdWrapper, // liked songs are "favorite" with string
     pub name: String,
     pub owned: bool,
     pub public: bool,
     pub tracks: u32,
-    pub r#type: RSyncPlaylistItemProviderData
+    pub r#type: RSyncPlaylistItemProviderData,
 }
 impl<'a> Into<Text<'a>> for RSyncPlaylistItem {
     fn into(self) -> Text<'a> {

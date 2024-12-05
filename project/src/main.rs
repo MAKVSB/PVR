@@ -1,8 +1,8 @@
 use std::{fs::File, io};
 
-use ratatui::{backend::CrosstermBackend, Terminal};
-use dotenv::dotenv;
 use color_eyre::{eyre::Context, Result};
+use dotenv::dotenv;
+use ratatui::{backend::CrosstermBackend, Terminal};
 use tracing::info;
 
 use crate::{
@@ -15,11 +15,11 @@ use tracing_appender::{non_blocking, non_blocking::WorkerGuard};
 
 pub mod app;
 pub mod event;
+pub mod providers;
 pub mod tui;
+pub mod types;
 pub mod ui;
 pub mod widgets;
-pub mod providers;
-pub mod types;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -60,8 +60,6 @@ fn init_tracing() -> Result<WorkerGuard> {
     let file = File::create("tracing.log").wrap_err("failed to create tracing.log")?;
     let (non_blocking, guard) = non_blocking(file);
 
-    tracing_subscriber::fmt()
-        .with_writer(non_blocking)
-        .init();
+    tracing_subscriber::fmt().with_writer(non_blocking).init();
     Ok(guard)
 }
