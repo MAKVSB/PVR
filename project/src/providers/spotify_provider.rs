@@ -25,8 +25,6 @@ impl SpotifyProviderBuilder {
     }
 }
 
-
-
 impl APIProviderBuilder for SpotifyProviderBuilder {
     #[allow(refining_impl_trait)]
     async fn authorize(&mut self) -> SpotifyProvider {
@@ -38,12 +36,9 @@ impl APIProviderBuilder for SpotifyProviderBuilder {
         let redirect_url = RedirectUrl::new(var_callback.to_owned()).unwrap();
         let auto_refresh = true;
         let scopes = vec![
-            "ugc-image-upload", "user-read-playback-state", "user-modify-playback-state", "user-read-currently-playing",
-            "app-remote-control", "streaming", "playlist-read-private", "playlist-read-collaborative", "playlist-modify-private",
-            "playlist-modify-public", "user-follow-modify", "user-follow-read", "user-read-playback-position", "user-top-read", 
-            "user-read-recently-played", "user-library-modify", "user-library-read", //"user-read-email", "user-read-private",
-            //"user-soa-link", "user-soa-unlink", "soa-manage-entitlements", "soa-manage-partner", "soa-create-partner"
-            ];
+            "app-remote-control", "playlist-read-private", "playlist-read-collaborative", "playlist-modify-private",
+            "playlist-modify-public", "user-library-modify", "user-library-read", "user-read-email", "user-read-private",
+        ];
 
         // Redirect the user to this URL to get the auth code and CSRF token
         let (client, url) = AuthCodeClient::new(var_client_id, var_client_secret, scopes, redirect_url, auto_refresh);
@@ -112,21 +107,25 @@ impl APIProviderBuilder for SpotifyProviderBuilder {
         };
 
         // Step 3: Finally, exchange the auth code for an access token
+        let client = client.authenticate(auth_result.code, auth_result.state).await.unwrap();
+        let owner_name = spotify_rs::get_current_user_profile(&client).await.unwrap().id;
+
         SpotifyProvider {
-            client: client.authenticate(auth_result.code, auth_result.state).await.unwrap(),
+            client,
+            owner_name,
         }
     }
 }
 
-impl From<SimplifiedPlaylist> for RSyncPlaylistItem {
-    fn from(item: SimplifiedPlaylist) -> Self {
+impl RSyncPlaylistItem {
+    fn from(item: SimplifiedPlaylist, owner_name: String) -> Self {
         RSyncPlaylistItem {
             collaborative: item.collaborative,
             description: item.description,
             url: item.external_urls.spotify,
             id: PlaylistIdWrapper::Id(item.id),
             name: item.name,
-            owned: item.owner.id == "69economy",
+            owned: item.owner.id == owner_name,
             public: item.public.unwrap_or(false),
             tracks: match item.tracks {
                 Some(val) => val.total,
@@ -157,6 +156,7 @@ impl From<Track> for RSyncSong {
 #[derive(Debug, Clone)]
 pub struct SpotifyProvider {
     client: spotify_rs::AuthCodeClient<Token>,
+    owner_name: String,
 }
 
 impl APIProvider for SpotifyProvider {
@@ -190,8 +190,8 @@ impl APIProvider for SpotifyProvider {
             }
             offset += per_request;
 
-            for playlist in response.items {
-                playlists.push(playlist.unwrap().into());
+            for playlist in response.items.into_iter().flatten() {
+                playlists.push(RSyncPlaylistItem::from(playlist, self.owner_name.clone()));
             }
             if offset > total.unwrap() {
                 break;
@@ -267,7 +267,7 @@ impl APIProvider for SpotifyProvider {
     }
 
     async fn create_playlist(&mut self, playlist_name: String) {
-        spotify_rs::create_playlist("69economy", playlist_name).send(&self.client).await.unwrap();
+        spotify_rs::create_playlist(self.owner_name.clone(), playlist_name).send(&self.client).await.unwrap();
     }
 
     async fn add_playlist_song(&mut self, playlist_id: PlaylistIdWrapper, song_ids: Vec<String>) {

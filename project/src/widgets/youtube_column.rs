@@ -34,7 +34,7 @@ impl YoutubeColumn {
             last_playlists_request_id: 0,
             last_songs_request_id: 0,
         };
-        // s.refresh_playlists();
+        s.refresh_playlists();
         s
     }
 

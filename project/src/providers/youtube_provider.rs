@@ -1,4 +1,4 @@
-use std::{env, fmt::Debug, thread::sleep, time::Duration};
+use std::{env, fmt::Debug};
 
 use google_youtube3::{api::{Playlist, PlaylistItem, PlaylistItemSnippet, PlaylistSnippet, PlaylistStatus, ResourceId, SearchResult, Video}, hyper_rustls, hyper_util, yup_oauth2::{self, authenticator_delegate::InstalledFlowDelegate}, YouTube};
 use tokio::sync::mpsc;
@@ -100,7 +100,7 @@ impl APIProviderBuilder for YoutubeProviderBuilder {
         let liked_playlist_id = client.channels()
             .list(&vec!["contentDetails".into()])
             .mine(true)
-            .doit().await.unwrap().1.items.unwrap()[0].content_details.clone().unwrap().related_playlists.unwrap().likes.unwrap();
+            .doit().await.unwrap().1.items.unwrap().first().unwrap().content_details.clone().unwrap().related_playlists.unwrap().likes.unwrap();
 
         YoutubeProvider {
             client,
@@ -236,25 +236,35 @@ impl APIProvider for YoutubeProvider {
     }
 
     async fn add_playlist_song(&mut self, playlist_id: PlaylistIdWrapper, song_id: Vec<String>) {
-        let p_id = match playlist_id {
-            PlaylistIdWrapper::Id(playlist_id) => playlist_id,
-            PlaylistIdWrapper::Liked => self.liked_playlist_id.clone(),
-        };
-
-        for id in song_id {
-            self.client.playlist_items().insert(PlaylistItem {
-                snippet: Some(PlaylistItemSnippet {
-                    playlist_id: Some(p_id.clone()),
-                    resource_id: Some(ResourceId {
-                        kind: Some("youtube#video".into()),
-                        video_id: Some(id),
+        match playlist_id {
+            PlaylistIdWrapper::Id(p_id) => {
+                for id in song_id {
+                    self.client.playlist_items().insert(PlaylistItem {
+                        snippet: Some(PlaylistItemSnippet {
+                            playlist_id: Some(p_id.clone()),
+                            resource_id: Some(ResourceId {
+                                kind: Some("youtube#video".into()),
+                                video_id: Some(id),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }),
                         ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }).doit().await.unwrap();
+                    }).doit().await.unwrap();
+                }
+            },
+            PlaylistIdWrapper::Liked => {
+                for id in song_id {
+                    self.client.videos().rate(id.as_str(), "like").doit().await.unwrap();
+                }
+            },
         }
+
+
+
+
+
+
     }
 
     async fn search(&mut self, query: String, limit: u32) -> Vec<RSyncSong> {       

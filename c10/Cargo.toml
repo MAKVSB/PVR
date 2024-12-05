@@ -1,0 +1,14 @@
+[package]
+name = "week10-exercises"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.93"
+futures = "0.3.31"
+humansize = "2.1.3"
+tokio = { version = "1.41.1", features = ["full"] }
+reqwest = { version = "0.12.9", features = ["rustls-tls-webpki-roots", "stream"] }
+url = "2.5.4"

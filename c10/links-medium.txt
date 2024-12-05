@@ -1,0 +1,8 @@
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/clang_doxygen-19.1.4.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/lldb-19.1.4.src.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/clang+llvm-19.1.4-x86_64-pc-windows-msvc.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/LLVM-19.1.4-Linux-X64.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/LLVM-19.1.4-macOS-ARM64.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/LLVM-19.1.4-win32.exe
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/llvm_doxygen-19.1.4.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/test-suite-19.1.4.src.tar.xz

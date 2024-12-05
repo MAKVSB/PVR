@@ -1,0 +1,4 @@
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/clang_doxygen-19.1.4.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/lldb-19.1.4.src.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/llvm_doxygen-19.1.4.tar.xz
+https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.4/test-suite-19.1.4.src.tar.xz

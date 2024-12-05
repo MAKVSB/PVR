@@ -71,6 +71,7 @@ where
 
     pub fn clear_selected(&mut self) {
         self.selected.clear();
+        self.state.select(None);
     }
 
     pub fn append_items(&mut self, items: Vec<T>) {
@@ -125,9 +126,9 @@ where
                 .enumerate()
                 .map(|(i, playlist)| {
                     if self.selected.contains(&i) {
-                        ListItem::from(playlist.clone()).bg(Color::Cyan)
+                        ListItem::from(playlist.clone()).bg(Color::Cyan).fg(Color::Black)
                     } else {
-                        ListItem::from(playlist.clone()).bg(Color::Black)
+                        ListItem::from(playlist.clone()).bg(Color::Black).fg(Color::Cyan)
                     }
                 })
                 .collect::<Vec<ListItem>>();
